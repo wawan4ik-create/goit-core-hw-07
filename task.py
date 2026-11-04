@@ -1,4 +1,34 @@
 from collections import UserDict
+from datetime import datetime, timedelta
+from functools import wraps
+
+def input_error(func):
+    """
+    Декоратор для обробки помилок введення користувача.
+    """
+    
+    @wraps(func)
+    def inner(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ValueError:
+            return "Enter the argument for the command"
+        except KeyError:
+            return "Contact not found"
+        except IndexError:
+            return "Enter the argument for the command"
+    return inner
+
+
+def parse_input(user_input):
+    """
+    Розбирає введений користувачем рядок на команду та аргументи.
+    Повертає кортеж (command, *args).
+    """
+
+    cmd, *args = user_input.split()
+    cmd = cmd.lower()
+    return cmd, *args
 
 class Field:
     """
@@ -24,6 +54,22 @@ class Phone(Field):
             raise ValueError("Phone number must be 10 digits long and contain only numbers.")
         super().__init__(value)
 
+class Birthday(Field):
+    """
+    Клас, що представляє день народження контакту.
+    """
+
+    def __init__(self, value):
+        try:
+            self.value = datetime.strptime(value, "%d.%m.%Y").date()    # Перевірка формату дати
+        except ValueError:
+            raise ValueError("Invalid date format. Use DD.MM.YYYY")
+
+    super().__init__(self.value)
+
+    def __str__(self):
+        return self.value.strftime("%d.%m.%Y")
+
 class Record:
     """
     Клас, що представляє запис контакту.
@@ -32,9 +78,10 @@ class Record:
     def __init__(self, name):
         self.name = Name(name)
         self.phones = []
+        self.birthday = None
 
     def __str__(self):
-        return f"Contact name: {self.name.value}, phones: {'; '.join(p.value for p in self.phones)}"
+        return f"Contact name: {self.name.value}, phones: {'; '.join(p.value for p in self.phones)}, birthday: {self.birthday if self.birthday else 'N/A'}"
 
     def add_phone(self, phone):
         self.phones.append(Phone(phone))
@@ -58,6 +105,9 @@ class Record:
         i = self.phones.index(phone_to_edit)
         self.phones[i] = new_phone
 
+    def add_birthday(self, birthday):
+        self.birthday = Birthday(birthday)
+
 
 class AddressBook(UserDict):
     """
@@ -76,28 +126,94 @@ class AddressBook(UserDict):
     def __str__(self):
         return "\n".join(str(record) for record in self.data.values())
 
+    def get_upcoming_birthdays(self):
+        today = datetime.today().date()
+        upcoming_birthdays = []
+        for record in self.data.values():
+            if not record.birthday:
+                continue
+
+            birthday = record.birthday.value
+            try:
+                next_birthday = birthday.replace(year=today.year)
+            except ValueError:
+                # February 29 falls on February 28 in non-leap years.
+                next_birthday = birthday.replace(year=today.year, day=28)
+
+            if next_birthday < today:
+                try:
+                    next_birthday = birthday.replace(year=today.year + 1)
+                except ValueError:
+                    next_birthday = birthday.replace(year=today.year + 1, day=28)
+
+            if (next_birthday - today).days > 7:
+                continue
+
+            congratulation_date = next_birthday
+            if congratulation_date.weekday() == 5:
+                congratulation_date += timedelta(days=2)
+            elif congratulation_date.weekday() == 6:
+                congratulation_date += timedelta(days=1)
+
+            upcoming_birthdays.append({
+                "name": record.name.value,
+                "birthday": congratulation_date.strftime("%d.%m.%Y"),
+            })
+
+        return upcoming_birthdays
+
+@input_error
+def add_contact(args, book: AddressBook):
+    name, phone, *_ = args
+    record = book.find(name)
+    message = "Contact updated."
+    if record is None:
+        record = Record(name)
+        book.add_record(record)
+        message = "Contact added."
+    if phone:
+        record.add_phone(phone)
+    return message
+
+
+def main():
+    book = AddressBook()
+    print("Welcome to the assistant bot!")
+    while True:
+        user_input = input("Enter a command: ")
+        command, *args = parse_input(user_input)
+
+        if command in ["close", "exit"]:
+            print("Good bye!")
+            break
+
+        elif command == "hello":
+            print("How can I help you?")
+
+        elif command == "add":
+            print(add_contact(args, book))
+
+        elif command == "change":
+            # реалізація
+
+        elif command == "phone":
+            # реалізація
+
+        elif command == "all":
+            # реалізація
+
+        elif command == "add-birthday":
+            # реалізація
+
+        elif command == "show-birthday":
+            # реалізація
+
+        elif command == "birthdays":
+            # реалізація
+
+        else:
+            print("Invalid command.")
+
 
 if __name__ == "__main__":
-    book = AddressBook()
-
-    john_record = Record("John")
-    john_record.add_phone("1234567890")
-    john_record.add_phone("5555555555")
-    book.add_record(john_record)
-
-    jane_record = Record("Jane")
-    jane_record.add_phone("9876543210")
-    book.add_record(jane_record)
-
-    print(book)
-
-    john = book.find("John")
-    john.edit_phone("1234567890", "1112223333")
-    print(john)     # Contact name: John, phones: 1112223333; 5555555555
-
-    found_phone = john.find_phone("5555555555")
-    print(f"{john.name}: {found_phone}")    # John: 5555555555
-
-    book.delete("Jane")
-    print(book)     # лише John
-    #john.edit_phone("1112223333", "abc")    # ValueError
+    main()
