@@ -11,8 +11,8 @@ def input_error(func):
     def inner(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except ValueError:
-            return "Enter the argument for the command"
+        except ValueError as e:
+            return str(e)
         except KeyError:
             return "Contact not found"
         except IndexError:
@@ -61,11 +61,10 @@ class Birthday(Field):
 
     def __init__(self, value):
         try:
-            self.value = datetime.strptime(value, "%d.%m.%Y").date()    # Перевірка формату дати
+            date = datetime.strptime(value, "%d.%m.%Y").date()    # Перевірка формату дати
         except ValueError:
             raise ValueError("Invalid date format. Use DD.MM.YYYY")
-
-    super().__init__(self.value)
+        super().__init__(date)
 
     def __str__(self):
         return self.value.strftime("%d.%m.%Y")
@@ -164,23 +163,105 @@ class AddressBook(UserDict):
 
 @input_error
 def add_contact(args, book: AddressBook):
+    """
+    Додає новий контакт або оновлює існуючий.
+    """
+
     name, phone, *_ = args
     record = book.find(name)
-    message = "Contact updated."
+
     if record is None:
         record = Record(name)
-        book.add_record(record)
-        message = "Contact added."
-    if phone:
         record.add_phone(phone)
-    return message
+        book.add_record(record)
+        return "Contact added."
+    record.add_phone(phone)
+    
+    return "Contact updated."
 
+@input_error
+def change_contact(args, book: AddressBook):
+    """
+    Змінює телефонний номер існуючого контакту.
+    """
+
+    name, old_phone, new_phone, *_ = args
+    record = book.find(name)
+    if record is None:
+        raise KeyError("Contact not found.")
+    record.edit_phone(old_phone, new_phone)
+    return "Contact updated."
+
+@input_error
+def get_phone(args, book: AddressBook):
+    """
+    Показує телефонний номер контакту.
+    """
+
+    name, *_ = args
+    record = book.find(name)
+    if record is None:
+        raise KeyError("Contact not found.")
+    if not record.phones:
+        return f"{name} has no phone numbers."
+    return f"Phone numbers for {name}: {', '.join(p.value for p in record.phones)}"
+
+@input_error
+def show_all_contacts(book: AddressBook):
+    """
+    Показує всі контакти.
+    """
+
+    if not book.data:
+        return "Address book is empty."
+    return str(book)
+
+@input_error
+def add_birthday(args, book: AddressBook):
+    """
+    Додає день народження контакту.
+    """
+
+    name, birthday, *_ = args
+    record = book.find(name)
+    if record is None:
+        raise KeyError("Contact not found.")
+    record.add_birthday(birthday)
+    return "Birthday added."
+
+@input_error
+def show_birthday(args, book: AddressBook):
+    """
+    Показує день народження контакту.
+    """
+
+    name, *_ = args
+    record = book.find(name)
+    if record is None:
+        raise KeyError("Contact not found.")
+    if record.birthday is None:
+        return "Birthday not set for this contact."
+    return f"{name}'s birthday is on {record.birthday}"
+
+@input_error
+def show_birthdays(args, book: AddressBook):
+    """
+    Показує список контактів з наступними днями народження.
+    """
+
+    birthdays = book.get_upcoming_birthdays()
+    if not birthdays:
+        return "No upcoming birthdays in the next 7 days."
+    else:
+        return "\n".join(f"{b['name']} - {b['birthday']}" for b in birthdays)
 
 def main():
     book = AddressBook()
     print("Welcome to the assistant bot!")
     while True:
         user_input = input("Enter a command: ")
+        if not user_input.strip():
+            continue
         command, *args = parse_input(user_input)
 
         if command in ["close", "exit"]:
@@ -194,22 +275,22 @@ def main():
             print(add_contact(args, book))
 
         elif command == "change":
-            # реалізація
+            print(change_contact(args, book))
 
         elif command == "phone":
-            # реалізація
+            print(get_phone(args, book))
 
         elif command == "all":
-            # реалізація
+            print(show_all_contacts(book))
 
         elif command == "add-birthday":
-            # реалізація
+            print(add_birthday(args, book))
 
         elif command == "show-birthday":
-            # реалізація
+            print(show_birthday(args, book))
 
         elif command == "birthdays":
-            # реалізація
+            print(show_birthdays(args, book))
 
         else:
             print("Invalid command.")
