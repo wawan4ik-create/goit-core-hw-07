@@ -15,6 +15,8 @@ def input_error(func):
             return str(e)
         except KeyError:
             return "Contact not found"
+        except AttributeError:
+            return "Contact not found"
         except IndexError:
             return "Enter the argument for the command"
     return inner
@@ -64,10 +66,12 @@ class Birthday(Field):
             date = datetime.strptime(value, "%d.%m.%Y").date()    # Перевірка формату дати
         except ValueError:
             raise ValueError("Invalid date format. Use DD.MM.YYYY")
-        super().__init__(date)
+        super().__init__(value)
 
-    def __str__(self):
-        return self.value.strftime("%d.%m.%Y")
+    @property
+    def date(self):
+        date = datetime.strptime(self.value, "%d.%m.%Y").date()
+        return date
 
 class Record:
     """
@@ -132,7 +136,7 @@ class AddressBook(UserDict):
             if not record.birthday:
                 continue
 
-            birthday = record.birthday.value
+            birthday = record.birthday.date
             try:
                 next_birthday = birthday.replace(year=today.year)
             except ValueError:
@@ -187,8 +191,6 @@ def change_contact(args, book: AddressBook):
 
     name, old_phone, new_phone, *_ = args
     record = book.find(name)
-    if record is None:
-        raise KeyError("Contact not found.")
     record.edit_phone(old_phone, new_phone)
     return "Contact updated."
 
@@ -200,8 +202,6 @@ def get_phone(args, book: AddressBook):
 
     name, *_ = args
     record = book.find(name)
-    if record is None:
-        raise KeyError("Contact not found.")
     if not record.phones:
         return f"{name} has no phone numbers."
     return f"Phone numbers for {name}: {', '.join(p.value for p in record.phones)}"
@@ -224,8 +224,6 @@ def add_birthday(args, book: AddressBook):
 
     name, birthday, *_ = args
     record = book.find(name)
-    if record is None:
-        raise KeyError("Contact not found.")
     record.add_birthday(birthday)
     return "Birthday added."
 
@@ -237,8 +235,6 @@ def show_birthday(args, book: AddressBook):
 
     name, *_ = args
     record = book.find(name)
-    if record is None:
-        raise KeyError("Contact not found.")
     if record.birthday is None:
         return "Birthday not set for this contact."
     return f"{name}'s birthday is on {record.birthday}"
